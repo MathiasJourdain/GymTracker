@@ -18,7 +18,7 @@ export default function Auth() {
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    const username = e.target.username.value; // Récupération du pseudo
+    const username = e.target.username.value; 
     const email = e.target.email.value;
     const password = e.target.password.value;
     const confirmPassword = e.target.confirmPassword.value;
@@ -28,7 +28,6 @@ export default function Auth() {
       return;
     }
 
-    // Ajout du pseudo dans les options (user_metadata) de Supabase
     const { error } = await supabase.auth.signUp({ 
       email, 
       password,
@@ -42,8 +41,8 @@ export default function Auth() {
     if (error) {
       alert("Erreur d'inscription : " + error.message);
     } else {
-      alert('Inscription réussie ! Vérifie ton email, puis connecte-toi.');
-      setAuthView('login');
+      // C'EST ICI QUE ÇA CHANGE : Plus de demande de vérification d'email
+      alert('Inscription réussie ! Bienvenue ' + username + ' 💪');
       setShowPassword(false);
       setShowConfirmPassword(false);
     }
@@ -58,7 +57,6 @@ export default function Auth() {
     if (error) alert("Erreur de connexion : " + error.message);
   };
 
-  // Icônes SVG pour l'œil
   const EyeIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
       <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
@@ -129,7 +127,6 @@ export default function Auth() {
           </form>
         ) : (
           <form onSubmit={handleRegister} className="space-y-6">
-            {/* Nouveau champ pour le pseudo */}
             <input name="username" type="text" required placeholder="Ton pseudo" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 text-white text-lg placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500 outline-none" />
 
             <input name="email" type="email" required placeholder="Ton email" className="w-full bg-gray-800 border border-gray-700 rounded-2xl px-6 py-4 text-white text-lg placeholder:text-gray-500 focus:border-blue-500 focus:ring-blue-500 outline-none" />
