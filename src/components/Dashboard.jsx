@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
 
-const EXERCISE_STORAGE_KEY = 'gym-tracker-shared-exercises';
 const WORKOUT_STORAGE_KEY = 'gym-tracker-workouts';
 const SETTINGS_KEY = 'gym-tracker-settings';
 
@@ -63,7 +62,10 @@ const formatDate = (value) => {
 
 export default function Dashboard({ session }) {
   const currentUserId = session?.user?.id || 'guest';
-  const [exercises, setExercises] = useState(() => loadLocalStorage(EXERCISE_STORAGE_KEY, []));
+  
+  // 1. Les exercices ne sont plus chargés depuis le localStorage, mais démarrent vides
+  const [exercises, setExercises] = useState([]);
+  
   const [workoutHistory, setWorkoutHistory] = useState([]);
   const [selectedExerciseId, setSelectedExerciseId] = useState('');
   const [exerciseForm, setExerciseForm] = useState(emptyExerciseForm);
@@ -78,14 +80,34 @@ export default function Dashboard({ session }) {
 
   const displayName = session?.user?.user_metadata?.username || session?.user?.email?.split('@')[0] || 'Sportif';
 
+  // 2. Chargement des exercices depuis Supabase au démarrage
+  useEffect(() => {
+    fetchSharedExercises();
+  }, []);
+
+  const fetchSharedExercises = async () => {
+    const { data, error } = await supabase
+      .from('exercises')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      const formattedExercises = data.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        target: ex.target,
+        imageData: ex.image_data, // On fait la correspondance avec la base de données
+        videoData: ex.video_data,
+        instructions: ex.instructions || []
+      }));
+      setExercises(formattedExercises);
+    }
+  };
+
   useEffect(() => {
     const savedWorkouts = loadLocalStorage(getUserWorkoutStorageKey(currentUserId), []);
     setWorkoutHistory(Array.isArray(savedWorkouts) ? savedWorkouts : []);
   }, [currentUserId]);
-
-  useEffect(() => {
-    localStorage.setItem(EXERCISE_STORAGE_KEY, JSON.stringify(exercises));
-  }, [exercises]);
 
   useEffect(() => {
     localStorage.setItem(getUserWorkoutStorageKey(currentUserId), JSON.stringify(workoutHistory));
@@ -170,6 +192,7 @@ export default function Dashboard({ session }) {
     setShowExerciseForm(false);
   };
 
+  // 3. Soumission de l'exercice directement dans Supabase
   const handleSubmitExercise = async (e) => {
     e.preventDefault();
 
@@ -185,36 +208,30 @@ export default function Dashboard({ session }) {
     if (exerciseForm.imageFile) {
       imageData = await fileToDataUrl(exerciseForm.imageFile);
     }
-
     if (exerciseForm.videoFile) {
       videoData = await fileToDataUrl(exerciseForm.videoFile);
     }
 
-    const preparedExercise = {
+    const dbExercise = {
       id: editingExerciseId || getSafeId(),
       name: trimmedName,
       target: exerciseForm.target.trim() || 'General',
-      imageData,
-      videoData,
-      instructions: exerciseForm.instructions
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean),
+      image_data: imageData,
+      video_data: videoData,
+      instructions: exerciseForm.instructions.split('\n').map((line) => line.trim()).filter(Boolean),
+      created_by: currentUserId
     };
 
     if (editingExerciseId) {
-      setExercises((prev) =>
-        prev.map((exercise) =>
-          exercise.id === editingExerciseId ? preparedExercise : exercise
-        )
-      );
-      setMessage('Exercice modifié avec succès !');
+      await supabase.from('exercises').update(dbExercise).eq('id', editingExerciseId);
+      setMessage('Exercice modifié pour tout le monde !');
     } else {
-      setExercises((prev) => [preparedExercise, ...prev]);
-      setMessage('Exercice ajouté avec succès !');
+      await supabase.from('exercises').insert([dbExercise]);
+      setMessage('Exercice ajouté pour tout le monde !');
     }
 
-    setSelectedExerciseId(preparedExercise.id);
+    await fetchSharedExercises(); // On rafraîchit la liste pour récupérer le nouvel exercice
+    setSelectedExerciseId(dbExercise.id);
     setTimeout(() => setMessage(''), 2500);
     resetExerciseForm();
   };
@@ -236,16 +253,17 @@ export default function Dashboard({ session }) {
     setShowExerciseForm(true);
   };
 
-  const handleDeleteExercise = (exerciseId) => {
-    const remainingExercises = exercises.filter((exercise) => exercise.id !== exerciseId);
+  // 4. Suppression de l'exercice dans Supabase
+  const handleDeleteExercise = async (exerciseId) => {
+    await supabase.from('exercises').delete().eq('id', exerciseId);
+    
+    // On met à jour l'interface
+    const remainingExercises = exercises.filter((ex) => ex.id !== exerciseId);
     setExercises(remainingExercises);
-
     if (selectedExerciseId === exerciseId) {
       setSelectedExerciseId(remainingExercises[0]?.id || '');
     }
-
     setWorkoutHistory((prev) => prev.filter((entry) => entry.machine_id !== exerciseId));
-
     if (editingExerciseId === exerciseId) {
       resetExerciseForm();
     }
@@ -585,6 +603,8 @@ export default function Dashboard({ session }) {
                   <div className="bg-gray-900 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <p className="font-bold text-sm capitalize truncate">{exercise.name}</p>
+                      
+                      {/* On affiche les boutons de modification/suppression uniquement si on est le créateur */}
                       <div className="flex gap-2">
                         <button
                           type="button"
