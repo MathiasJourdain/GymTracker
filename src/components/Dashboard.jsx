@@ -29,7 +29,6 @@ const getSafeId = () => {
   return `exercise-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-// Sert uniquement pour l'aperçu visuel avant l'envoi
 const fileToDataUrl = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -76,8 +75,6 @@ export default function Dashboard({ session }) {
   const [reps, setReps] = useState('');
   const [message, setMessage] = useState('');
   const [editingWorkoutId, setEditingWorkoutId] = useState(null);
-  
-  // Nouvel état pour bloquer le bouton pendant le chargement des vidéos
   const [isUploading, setIsUploading] = useState(false);
 
   const displayName = session?.user?.user_metadata?.username || session?.user?.email?.split('@')[0] || 'Sportif';
@@ -191,7 +188,6 @@ export default function Dashboard({ session }) {
     let finalVideoUrl = exerciseForm.videoData || '';
 
     try {
-      // Upload de l'image sur Supabase Storage
       if (exerciseForm.imageFile) {
         const fileExt = exerciseForm.imageFile.name.split('.').pop();
         const fileName = `img-${Date.now()}.${fileExt}`;
@@ -205,7 +201,6 @@ export default function Dashboard({ session }) {
         finalImageUrl = data.publicUrl;
       }
 
-      // Upload de la vidéo sur Supabase Storage
       if (exerciseForm.videoFile) {
         const fileExt = exerciseForm.videoFile.name.split('.').pop();
         const fileName = `vid-${Date.now()}.${fileExt}`;
@@ -219,7 +214,6 @@ export default function Dashboard({ session }) {
         finalVideoUrl = data.publicUrl;
       }
 
-      // Enregistrement final en base de données avec les liens légers
       const dbExercise = {
         id: editingExerciseId || getSafeId(),
         name: trimmedName,
@@ -267,7 +261,6 @@ export default function Dashboard({ session }) {
   };
 
   const handleDeleteExercise = async (exercise) => {
-    // Optionnel: Supprimer les fichiers du Storage pour libérer de la place
     if (exercise.imageData && exercise.imageData.includes('supabase.co')) {
       const fileName = exercise.imageData.split('/').pop();
       await supabase.storage.from('exercise-media').remove([fileName]);
@@ -405,8 +398,17 @@ export default function Dashboard({ session }) {
           <div className="flex items-center justify-between mb-4 gap-3">
             <h2 className="text-xl font-bold">1. Mes exercices</h2>
             <button
-              onClick={() => { setShowExerciseForm(!showExerciseForm); if (!showExerciseForm) resetExerciseForm(); }}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 text-sm rounded-xl font-semibold"
+              type="button"
+              onClick={() => {
+                if (showExerciseForm) {
+                  resetExerciseForm();
+                } else {
+                  setExerciseForm(emptyExerciseForm);
+                  setEditingExerciseId(null);
+                  setShowExerciseForm(true);
+                }
+              }}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 text-sm rounded-xl font-semibold transition"
             >
               {showExerciseForm ? 'Fermer' : 'Ajouter un exercice'}
             </button>
