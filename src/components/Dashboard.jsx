@@ -76,6 +76,9 @@ export default function Dashboard({ session }) {
   const [message, setMessage] = useState('');
   const [editingWorkoutId, setEditingWorkoutId] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // Nouvel état pour l'agrandissement des médias
+  const [enlargedMedia, setEnlargedMedia] = useState({ isOpen: false, type: '', src: '' });
 
   const displayName = session?.user?.user_metadata?.username || session?.user?.email?.split('@')[0] || 'Sportif';
 
@@ -96,7 +99,8 @@ export default function Dashboard({ session }) {
         target: ex.target,
         imageData: ex.image_data,
         videoData: ex.video_data,
-        instructions: ex.instructions || []
+        instructions: ex.instructions || [],
+        created_by: ex.created_by // Correction : on récupère bien l'auteur !
       }));
       setExercises(formattedExercises);
     }
@@ -419,11 +423,11 @@ export default function Dashboard({ session }) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <label className="block text-sm text-gray-300">
                   Nom de l’exercice
-                  <input value={exerciseForm.name} onChange={(e) => handleFormChange('name', e.target.value)} className="mt-2 w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none" required />
+                  <input value={exerciseForm.name} onChange={(e) => handleFormChange('name', e.target.value)} className="mt-2 w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-blue-500" required />
                 </label>
                 <label className="block text-sm text-gray-300">
                   Muscle ciblé
-                  <input value={exerciseForm.target} onChange={(e) => handleFormChange('target', e.target.value)} className="mt-2 w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none" />
+                  <input value={exerciseForm.target} onChange={(e) => handleFormChange('target', e.target.value)} className="mt-2 w-full bg-gray-800 border border-gray-700 text-white rounded-xl p-3 outline-none focus:border-blue-500" placeholder="Ex: Triceps" />
                 </label>
               </div>
 
@@ -455,7 +459,7 @@ export default function Dashboard({ session }) {
 
               <label className="block text-sm text-gray-300">
                 Instructions (une par ligne)
-                <textarea rows={3} value={exerciseForm.instructions} onChange={(e) => handleFormChange('instructions', e.target.value)} className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-xl p-3 outline-none" />
+                <textarea rows={3} value={exerciseForm.instructions} onChange={(e) => handleFormChange('instructions', e.target.value)} className="mt-2 w-full bg-gray-800 border border-gray-700 rounded-xl p-3 outline-none focus:border-blue-500" />
               </label>
 
               <div className="flex gap-3 justify-end items-center">
@@ -473,18 +477,48 @@ export default function Dashboard({ session }) {
             <div className="flex overflow-x-auto gap-4 pb-2 hide-scrollbar">
               {exercises.map((exercise) => (
                 <div key={exercise.id} onClick={() => setSelectedExerciseId(exercise.id)} className={`shrink-0 w-52 rounded-2xl overflow-hidden cursor-pointer border-2 transition-all ${selectedExerciseId === exercise.id ? 'border-blue-500 scale-[1.02]' : 'border-gray-800 opacity-90 hover:opacity-100'}`}>
-                  <div className="h-40 bg-black">
-                    {exercise.videoData ? <video src={exercise.videoData} className="w-full h-full object-cover" muted playsInline loop autoPlay /> : exercise.imageData ? <img src={exercise.imageData} className="w-full h-full object-cover" alt={exercise.name} /> : <div className="w-full h-full bg-gray-800 flex items-center justify-center text-xs">Pas d'image</div>}
-                  </div>
-                  <div className="bg-gray-900 p-3">
-                    <p className="font-bold text-sm capitalize truncate mb-2">{exercise.name}</p>
-                    {exercise.created_by === currentUserId && (
-                      <div className="flex gap-2">
-                        <button onClick={(e) => { e.stopPropagation(); handleEditExercise(exercise); }} className="text-xs text-blue-300">Modifier</button>
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteExercise(exercise); }} className="text-xs text-red-300">Supprimer</button>
+                  
+                  <div 
+                    className="h-40 bg-black relative group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedExerciseId(exercise.id); // Sélectionne quand même l'exercice
+                      if (exercise.videoData) setEnlargedMedia({ isOpen: true, type: 'video', src: exercise.videoData });
+                      else if (exercise.imageData) setEnlargedMedia({ isOpen: true, type: 'image', src: exercise.imageData });
+                    }}
+                  >
+                    {exercise.videoData ? (
+                      <video src={exercise.videoData} className="w-full h-full object-cover" muted playsInline loop autoPlay />
+                    ) : exercise.imageData ? (
+                      <img src={exercise.imageData} className="w-full h-full object-cover" alt={exercise.name} />
+                    ) : (
+                      <div className="w-full h-full bg-gray-800 flex items-center justify-center text-xs">Pas d'image</div>
+                    )}
+                    
+                    {/* Icône de loupe au survol */}
+                    {(exercise.videoData || exercise.imageData) && (
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                        <svg className="w-10 h-10 text-white drop-shadow-md" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>
                       </div>
                     )}
                   </div>
+
+                  <div className="bg-gray-900 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <p className="font-bold text-sm capitalize truncate">{exercise.name}</p>
+                      
+                      {/* Les boutons Modifier/Supprimer sont de retour ! */}
+                      {exercise.created_by === currentUserId && (
+                        <div className="flex gap-2">
+                          <button onClick={(e) => { e.stopPropagation(); handleEditExercise(exercise); }} className="text-xs text-blue-300 hover:text-blue-200">Modifier</button>
+                          <button onClick={(e) => { e.stopPropagation(); handleDeleteExercise(exercise); }} className="text-xs text-red-300 hover:text-red-200">Suppr.</button>
+                        </div>
+                      )}
+                    </div>
+                    {/* L'étiquette du muscle ciblé est de retour ! */}
+                    <p className="text-xs text-gray-400">{exercise.target || 'Général'}</p>
+                  </div>
+
                 </div>
               ))}
             </div>
@@ -505,17 +539,17 @@ export default function Dashboard({ session }) {
           <div className="flex gap-4">
             <div className="flex-1">
               <label className="block text-sm text-gray-400 mb-2 font-medium">Poids (kg)</label>
-              <input type="number" step="0.5" required className="w-full bg-gray-800 p-4 rounded-xl text-white text-xl text-center font-bold" value={weight} onChange={(e) => setWeight(e.target.value)} />
+              <input type="number" step="0.5" required className="w-full bg-gray-800 p-4 rounded-xl text-white text-xl text-center font-bold outline-none focus:border-blue-500 border border-gray-700" value={weight} onChange={(e) => setWeight(e.target.value)} />
             </div>
             <div className="flex-1">
               <label className="block text-sm text-gray-400 mb-2 font-medium">Reps</label>
-              <input type="number" required className="w-full bg-gray-800 p-4 rounded-xl text-white text-xl text-center font-bold" value={reps} onChange={(e) => setReps(e.target.value)} />
+              <input type="number" required className="w-full bg-gray-800 p-4 rounded-xl text-white text-xl text-center font-bold outline-none focus:border-blue-500 border border-gray-700" value={reps} onChange={(e) => setReps(e.target.value)} />
             </div>
           </div>
           <button type="submit" disabled={!selectedExerciseId} className="w-full p-5 rounded-2xl font-extrabold text-xl mt-6 transition-all bg-blue-600 hover:bg-blue-700 text-white disabled:bg-gray-800 disabled:text-gray-500">
             {editingWorkoutId ? 'Mettre à jour' : 'Valider'}
           </button>
-          {message && <div className="mt-4 p-3 bg-green-900/30 text-green-400 text-center font-medium rounded-xl">{message}</div>}
+          {message && <div className="mt-4 p-3 bg-green-900/30 text-green-400 text-center font-medium rounded-xl border border-green-500/50">{message}</div>}
         </form>
 
         {activeExercise && (
@@ -524,18 +558,42 @@ export default function Dashboard({ session }) {
             {activeHistory.length > 0 ? (
               <div className="space-y-3">
                 {activeHistory.map((entry) => (
-                  <button key={entry.id} onClick={() => startEditingWorkout(entry)} className="w-full text-left p-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700">
+                  <button key={entry.id} onClick={() => startEditingWorkout(entry)} className="w-full text-left p-3 bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition">
                     <div className="flex justify-between items-center">
-                      <div><div className="font-semibold">{entry.weight} kg</div><div className="text-sm text-gray-400">{entry.reps} reps</div></div>
+                      <div><div className="font-semibold text-white">{entry.weight} kg</div><div className="text-sm text-gray-400">{entry.reps} reps</div></div>
                       <div className="text-sm text-gray-400">{formatDate(entry.created_at || entry.date)}</div>
                     </div>
                   </button>
                 ))}
               </div>
-            ) : <div className="text-gray-400 text-sm py-5 text-center">Aucune série enregistrée.</div>}
+            ) : <div className="text-gray-400 text-sm py-5 text-center border border-dashed border-gray-700 rounded-2xl">Aucune série enregistrée.</div>}
           </div>
         )}
       </main>
+
+      {/* MODAL POUR AGRANDIR L'IMAGE/VIDEO */}
+      {enlargedMedia.isOpen && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4 backdrop-blur-sm" 
+          onClick={() => setEnlargedMedia({ isOpen: false, type: '', src: '' })}
+        >
+          <button className="absolute top-6 right-6 text-white bg-gray-800 rounded-full p-3 hover:bg-gray-700 transition">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
+          <div className="max-w-4xl max-h-[90vh] w-full h-full flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+            {enlargedMedia.type === 'video' ? (
+              <video src={enlargedMedia.src} controls autoPlay className="max-w-full max-h-full rounded-2xl shadow-2xl" />
+            ) : (
+              <img src={enlargedMedia.src} className="max-w-full max-h-full rounded-2xl object-contain shadow-2xl" alt="Agrandissement" />
+            )}
+          </div>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{ __html: `
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      ` }} />
     </div>
   );
 }
